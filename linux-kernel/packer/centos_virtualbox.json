@@ -15,7 +15,7 @@
       "disk_size": "10240",
       "headless": true,
       "memory": "1024",
-      "cpus": "2",
+      "cpus": "4",
       "guest_os_type": "RedHat_64",
       "http_directory": "http",
 
@@ -30,7 +30,7 @@
       "shutdown_command": "sudo -S /sbin/halt -h -p",
       "shutdown_timeout" : "5m",
 
-      "ssh_wait_timeout": "20m",
+      "ssh_wait_timeout": "50m",
       "ssh_username": "vagrant",
       "ssh_password": "vagrant",
       "ssh_port": 22,
@@ -62,9 +62,9 @@
     {
       "type": "shell",
       "execute_command": "{{.Vars}} sudo -S -E bash '{{.Path}}'",
-      "start_retry_timeout": "1m",
+      "start_retry_timeout": "2m",
       "expect_disconnect": true,
-      "pause_before": "20s",
+      "pause_before": "40s",
       "override": {
         "{{user `image_name`}}" : {
           "scripts" :
