@@ -5,9 +5,9 @@ MACHINES = {
               # VM box
               :box_name => ENV['MY_BOX'] || "centos/7",
               # VM CPU count
-              :cpus => 2,
+              :cpus => 3,
               # VM RAM size (Mb)
-              :memory => 1024,
+              :memory => 7000,
               # networks
               :net => [],
               # forwarded ports
@@ -19,8 +19,11 @@ MACHINES = {
 
 Vagrant.configure("2") do |config|
   MACHINES.each do |boxname, boxconfig|
-    # Disable shared folders
-    config.vm.synced_folder ".", "/vagrant", disabled: true
+    if boxconfig[:provider]=="virtualbox"
+      config.vm.synced_folder ".", "/vagrant", type: "virtualbox", SharedFoldersEnableSymlinksCreate: "false"
+    else
+      config.vm.synced_folder ".", "/vagrant", disabled: true
+    end
     # Apply VM config
     config.vm.define boxname do |box|
       # Set VM base box and hostname    
@@ -44,6 +47,7 @@ Vagrant.configure("2") do |config|
         v.memory = boxconfig[:memory]
         v.cpus = boxconfig[:cpus]
         if boxconfig[:provider]=="virtualbox"
+          #v.customize ["storageattach", :id, "--storagectl", "IDE Controller", "--port", "1", "--device", "0", "--type", "dvddrive", "--medium", "/usr/share/virtualbox/VBoxGuestAdditions.iso"]
           v.customize ["modifyvm", :id, "--vrde", "on"]
           v.customize ["modifyvm", :id, "--vrdeport", "3940"]
           v.customize ["modifyvm", :id, "--vrdeaddress", "127.0.0.1"]

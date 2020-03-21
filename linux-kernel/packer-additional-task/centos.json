@@ -1,0 +1,139 @@
+{
+  "variables": {
+    "artifact_description": "CentOS 7.7 with kernel {{user `kernel_version`}}",
+    "artifact_version": "7.7.1908",
+    "kernel_version": "4.19.109",
+    "image_name": "centos-7.7",
+    "disk_size": "20480",
+    "memory": "1024",
+    "cpus": "2",
+    "guest_temp_folder": "/home/vagrant"
+  },
+
+  "builders": [
+    {
+      "name": "qemu-{{user `image_name`}}",
+      "type": "qemu",
+      "vm_name": "packer-centos-vm",
+
+      "accelerator": "kvm",
+      "machine_type": "ubuntu",
+      "net_device": "virtio-net",
+      "disk_interface": "virtio",
+      "headless": true,
+      "boot_wait": "10s",
+      "disk_size": "{{user `disk_size`}}",
+      "memory": "{{user `memory`}}",
+      "cpus": "{{user `cpus`}}",
+      "http_directory": "http",
+
+      "iso_url": "http://mirror.yandex.ru/centos/7.7.1908/isos/x86_64/CentOS-7-x86_64-Minimal-1908.iso",
+      "iso_checksum": "9a2c47d97b9975452f7d582264e9fc16d108ed8252ac6816239a3b58cef5c53d",
+      "iso_checksum_type": "sha256",
+
+      "boot_command": [
+        "<tab> text ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/vagrant.ks<enter><wait>"
+      ],
+
+      "shutdown_command": "sudo -S /sbin/halt -h -p",
+      "shutdown_timeout" : "5m",
+
+      "ssh_wait_timeout": "20m",
+      "ssh_username": "vagrant",
+      "ssh_password": "vagrant",
+      "ssh_port": 22,
+      "ssh_pty": true,
+
+      "output_directory": "builds"
+    },
+
+    {
+      "name": "virtualbox-{{user `image_name`}}",
+      "type": "virtualbox-iso",
+      "vm_name": "packer-centos-vm",
+
+      "boot_wait": "20s",
+      "disk_size": "{{user `disk_size`}}",
+      "memory": "{{user `memory`}}",
+      "cpus": "{{user `cpus`}}",
+      "headless": true,
+      "guest_os_type": "RedHat_64",
+      "guest_additions_mode": "upload",
+      "guest_additions_path": "{{user `guest_temp_folder`}}/VBoxGuestAdditions.iso",
+      "http_directory": "http",
+
+      "iso_url": "http://mirror.yandex.ru/centos/7.7.1908/isos/x86_64/CentOS-7-x86_64-Minimal-1908.iso",
+      "iso_checksum": "9a2c47d97b9975452f7d582264e9fc16d108ed8252ac6816239a3b58cef5c53d",
+      "iso_checksum_type": "sha256",
+
+      "boot_command": [
+        "<tab> text ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/vagrant.ks<enter><wait>"
+      ],
+
+      "shutdown_command": "sudo -S /sbin/halt -h -p",
+      "shutdown_timeout" : "5m",
+
+      "ssh_wait_timeout": "50m",
+      "ssh_username": "vagrant",
+      "ssh_password": "vagrant",
+      "ssh_port": 22,
+      "ssh_pty": true,
+
+      "output_directory": "builds",
+
+      "export_opts":
+      [
+        "--manifest",
+        "--vsys", "0",
+        "--description", 
+        "{{user `artifact_description`}}",
+        "--version", 
+        "{{user `artifact_version`}}"
+      ]
+    }
+  ],
+  
+
+  "post-processors": [
+    {
+      "compression_level": "7",
+      "output": "packer_artifact/centos-build-{{user `artifact_version`}}-kernel-{{user `kernel_version`}}-x86_64-Minimal.box",
+      "type": "vagrant"
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "file",
+      "source": "build_additional_params",
+      "destination": "{{user `guest_temp_folder`}}/build_additional_params"
+    },
+
+    { "type": "shell",
+      "pause_before": "30s", 
+      "start_retry_timeout": "2m",
+      "expect_disconnect": true,          
+      "environment_vars": [
+        "KERNEL_VER={{user `kernel_version`}}",
+        "TEMP_FOLDER={{user `guest_temp_folder`}}",
+        "BUILD_PARAMS_PATH={{user `guest_temp_folder`}}/build_additional_params"        
+      ],
+      "execute_command": "{{.Vars}} sudo -S -E bash '{{.Path}}'",
+      "scripts": [
+        "scripts/stage-0-os-update.sh",
+        "scripts/stage-1-kernel-build.sh",
+        "scripts/stage-3-clean.sh"
+      ],
+      "override": {
+        "virtualbox-{{user `image_name`}}" : {
+          "scripts" :
+            [ "scripts/stage-0-os-update.sh",
+              "scripts/stage-1-kernel-build.sh",
+              "scripts/stage-2-install-vbox-additions.sh",
+              "scripts/stage-3-clean.sh"
+            ]
+        }
+      }
+
+    }
+  ]
+}
