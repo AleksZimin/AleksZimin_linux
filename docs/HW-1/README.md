@@ -4,248 +4,15 @@
 
 ## Предварительные действия
 
-### Подготовил виртуалку в GCP с включенной вложенной виртуализацией
+### [Подготовил виртуалку в GCP с включенной вложенной виртуализацией](../common/GCP.MD#create-vm-with-enabled-nested-virtualisation)
 
-- Задал необходимые переменные
+### [Установил утилиты HashiCorp (Vagrant и Packer) на виртуалку в GCP](../common/INSTALLATION.MD#hashicorp-utils)
 
-```bash
-VM_NAME=ubuntu18-nested
-MY_PROJECT=linux-zav
-DISK_SIZE=100GB
+### [Установил VirtualBox на виртуалку в GCP](../common/INSTALLATION.MD#virtualbox)
 
-DISK_TYPE=pd-standard
-#DISK_TYPE=pd-ssd
-MY_ZONE=europe-north1-b
-VM_OS=ubuntu-os-cloud
-VM_OS_VER=ubuntu-1804-lts
-```
+### [Установил qemu-kvm](../common/INSTALLATION.MD#qemu-kvm)
 
-- Перешел в свой в проект
-
-```bash
-gcloud config set project $MY_PROJECT
-```
-
-- Создал загрузочный диск с лицензией для вложенной виртуализации
-
-```bash
-gcloud compute disks create disk1 \
-  --image-project $VM_OS \
-  --image-family $VM_OS_VER \
-  --zone $MY_ZONE \
-  --size=$DISK_SIZE \
-  --type=$DISK_TYPE
-
-gcloud compute images create nested-vm-image \
-  --source-disk disk1 --source-disk-zone $MY_ZONE \
-  --licenses "https://www.googleapis.com/compute/v1/projects/vm-options/global/licenses/enable-vmx"
-
-gcloud compute disks delete disk1 --zone $MY_ZONE
-```
-
-- Создал ВМ с загрузочным диском, созданным выше
-
-```bash
-gcloud compute instances create $VM_NAME\
-  --min-cpu-platform "Intel Skylake" \
-  --machine-type=custom-6-10240 \
-  --image nested-vm-image \
-  --boot-disk-type=$DISK_TYPE \
-  --boot-disk-size=$DISK_SIZE \
-  --zone=$MY_ZONE \
-  --restart-on-failure
-```
-
-- Зашел на созданную виртуалку и проверил вложенную виртуализацию (команда должна вывести кол-во ядер, если виртуализация включена):
-
-```bash
-gcloud compute ssh $VM_NAME
-egrep -c '(vmx|svm)' /proc/cpuinfo
-```
-
-### Установил gpg ключ HashiCorp на виртуалку в GCP
-
-- Ипортируем открытый ключ HashiCorp и проверяем ключ
-
-```bash
-gpg --keyserver pgp.mit.edu --recv 51852D87348FFC4C
-gpg --fingerprint 91A6E7F85D05C65630BEF18951852D87348FFC4C
-```
-
-- Если вывод предыдущей команды в поле uid содержит подстроку "HashiCorp Security <security@hashicorp.com>", то добавляем ключ в доверенные ключи:
-
-```bash
-echo -e "5\ny\n" | gpg --command-fd 0 --edit-key 91A6E7F85D05C65630BEF18951852D87348FFC4C trust
-```
-
-### Установил Vagrant на виртуалку в GCP
-
-- Задаем версию Vagrant, версию ОС, скачиваем файл с хешами пакетов и бинарников Vagrant, ЭЦП для него и пакет для выбранной ОС
-
-```bash
-VAGRANT_VER=2.2.7
-OS_VER=x86_64.deb
-mkdir -p ~/distib/vagrant/$VAGRANT_VER && cd ~/distib/vagrant/$VAGRANT_VER
-curl -s --remote-name-all https://releases.hashicorp.com/vagrant/${VAGRANT_VER}/vagrant_${VAGRANT_VER}_{SHA256SUMS,SHA256SUMS.sig,${OS_VER}}
-```
-
-- Проверяем подлинность файла с хешами (в выводе команды должна быть подстрока "Good signature from "HashiCorp Security <security@hashicorp.com>"")
-
-```bash
-gpg --verify vagrant_${VAGRANT_VER}_{SHA256SUMS.sig,SHA256SUMS}
-```
-
-- Проверяем хеш пакета:
-
-```bash
-grep vagrant_${VAGRANT_VER}_${OS_VER} vagrant_${VAGRANT_VER}_SHA256SUMS | shasum -a 256 -c -
-```
-
-- Если хеши совпадают, то устанавливаем Vagrant (команда ниже для Debian-like систем)
-
-```bash
-sudo dpkg -i vagrant_${VAGRANT_VER}_${OS_VER}
-```
-
-### Установил Packer на виртуалку в GCP
-
-- Задаем версию Packer, версию ОС, скачиваем файл с хешами пакетов и бинарников Packer, ЭЦП для него и архив с бинарником для Linux
-
-```bash
-PACKER_VER=1.5.4
-OS_VER=linux_amd64.zip
-mkdir -p ~/distib/packer/$PACKER_VER && cd ~/distib/packer/$PACKER_VER
-curl -s --remote-name-all https://releases.hashicorp.com/packer/${PACKER_VER}/packer_${PACKER_VER}_{SHA256SUMS,SHA256SUMS.sig,${OS_VER}}
-```
-
-- Проверяем подлинность файла с хешами (в выводе команды должна быть подстрока "Good signature from "HashiCorp Security <security@hashicorp.com>"")
-
-```bash
-gpg --verify packer_${PACKER_VER}_{SHA256SUMS.sig,SHA256SUMS}
-```
-
-- Проверяем хеш пакета:
-
-```bash
-grep packer_${PACKER_VER}_${OS_VER} packer_${PACKER_VER}_SHA256SUMS | shasum -a 256 -c -
-```
-
-- Если хеши совпадают, то устанавливаем Packer
-
-```bash
-zcat packer_${PACKER_VER}_${OS_VER} | sudo tee /usr/local/bin/packer >/dev/null && \
-  sudo chmod +x /usr/local/bin/packer
-```
-
-### Установил VirtualBox на виртуалку в GCP
-
-- Добавил репозиторий Vbox
-
-```bash
-sudo add-apt-repository "deb https://download.virtualbox.org/virtualbox/debian $(lsb_release -cs) contrib"
-```
-
-- Добавил открытые ключи для apt-secure
-
-```bash
-wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo apt-key add -
-wget -q https://www.virtualbox.org/download/oracle_vbox.asc -O- | sudo apt-key add -
-```
-
-- Проверяем ключи
-
-```bash
-apt-key finger B9F8D658297AF3EFC18D5CDFA2F683C52980AECF
-apt-key finger 7B0FAB3A13B907435925D9C954422A4B98AB5139
-```
-
-- Если вывод предыдущих команд в поле uid содержит подстроку "Oracle Corporation (VirtualBox archive signing key) <info@virtualbox.org>", то устанавливаем Vbox
-
-```bash
-sudo apt-get update
-sudo apt-get install virtualbox-6.1
-```
-
-- Установил extention pack
-
-```bash
-mkdir -p ~/distib/virtualbox && cd ~/distib/virtualbox
-curl -O https://download.virtualbox.org/virtualbox/6.1.4/Oracle_VM_VirtualBox_Extension_Pack-6.1.4.vbox-extpack
-sudo vboxmanage extpack install ./Oracle_VM_VirtualBox_Extension_Pack-6.1.4.vbox-extpack
-```
-
-### Установил qemu-kvm и провайдер vagrant-libvirt для Vagrant на виртуалку в GCP
-
-- Проверил хост на возможность работы kvm
-
-```bash
-sudo apt-get update && sudo apt-get install cpu-checker
-sudo kvm-ok
-```
-
-- Установил необходимые пакеты для работы с kvm
-
-```bash
-sudo apt-get update &&\
- sudo apt-get install uml-utilities qemu-kvm bridge-utils virtinst libvirt-bin -y
-```
-
-- Проверил службу libvirt (она должна быть в статусе enabled)
-
-```bash
-sudo systemctl status libvirt-bin
-```
-
-- Проверил наличие моста для виртуалок
-
-```bash
-sudo ifconfig -a | grep virbr -A 6
-```
-
-- Добавил своего пользователя в группы libvirt и kvm, чтобы можно было управлять виртуалками без sudo
-
-```bash
-sudo usermod -a -G libvirt,kvm $USER
-```
-
-- Обновил текущий shell, чтобы изменения в группах применились
-
-```bash
-exec newgrp kvm
-exec newgrp libvirt
-```
-
-- Проверил подключение к гипервизору (выйти из virsh можно с помощью команды quit)
-
-```bash
-virsh --connect qemu:///system
-```
-
-- Добавил репо с universe пакетами (Community maintained software, i.e. not officially supported software.)
-
-```bash
-sudo bash -c 'echo "deb-src http://us.archive.ubuntu.com/ubuntu/ $(lsb_release -cs) universe" >> /etc/apt/sources.list.d/deb-src.list'
-sudo apt update
-```
-
-- Установил нобходимые пакеты для работы провайдера vagrant-libvirt (используется команда apt-get build-dep для установки всех необходимых для сборки зависимостей)
-
-```bash
-sudo apt-get build-dep vagrant ruby-libvirt
-sudo apt-get install libxslt-dev libxml2-dev libvirt-dev zlib1g-dev ruby-dev
-```
-
-- Установил провайдер vagrant-libvirt
-
-```bash
-vagrant plugin install vagrant-libvirt
-```
-
-- Задал переменную окружения, в которой указал провайдер по-умолчанию для Vagrant
-
-```bash
-export VAGRANT_DEFAULT_PROVIDER=libvirt
-```
+### [Установил провайдер vagrant-libvirt для Vagrant на виртуалку в GCP](../common/INSTALLATION.MD#install-provider-vagrant-libvirt-for-vagrant)
 
 ### Подготовил репозиторий (предварительно создал свой репо для выполнения ДЗ на github)
 
@@ -437,14 +204,14 @@ MY_PROVIDER='virtualbox' vagrant ssh
 
 ### Загрузил полученный образ в Vagrant Cloud
 
-- Создал аккаунт в https://app.vagrantup.com/
+- Создал аккаунт в <https://app.vagrantup.com/>
 
 - Залогинился в Vagrant Cloud в cli
 
 ```bash
 vagrant cloud auth login
   Vagrant Cloud username or email: <user_email>
-  Password (will be hidden): 
+  Password (will be hidden):
   Token description (Defaults to "Vagrant login from DS-WS"):
   You are now logged in.
 ```
@@ -722,6 +489,5 @@ USERNAME=realzav
 vagrant cloud publish --release $USERNAME/centos-7-5.4-build 1.0 virtualbox \
         packer-additional-task/packer_artifact/centos-build-7.7.1908-kernel-5.4.26-x86_64-Minimal.box
 ```
-
 
 ### [Вернуться в корень репо](/../../)
